@@ -1,6 +1,15 @@
 from fastmcp import Context
+from pyatv.const import InputAction
 
 from ..util import parse_repeat, parse_shuffle
+
+INPUT_ACTION_MAP = {
+    "single_tap": InputAction.SingleTap,
+    "double_tap": InputAction.DoubleTap,
+    "hold": InputAction.Hold,
+}
+
+DIRECTION_NAMES = {"up", "down", "left", "right", "select", "menu", "home", "top_menu"}
 
 
 def register_remote_tools(mcp):
@@ -110,25 +119,17 @@ def register_remote_tools(mcp):
         ctx: Context = None,
     ) -> str:
         """Navigate the device UI. Direction: 'up', 'down', 'left', 'right', 'select', 'menu', 'home', 'top_menu'. Action: 'single_tap', 'double_tap', 'hold'."""
+        if direction not in DIRECTION_NAMES:
+            return f"Unknown direction: {direction}. Use: {', '.join(sorted(DIRECTION_NAMES))}"
+
+        input_action = INPUT_ACTION_MAP.get(action)
+        if input_action is None:
+            return f"Unknown action: {action}. Use: {', '.join(INPUT_ACTION_MAP)}"
+
         conn = await ctx.lifespan_context["get_connections"]()
         atv = await conn.get(device)
         rc = atv.remote_control
 
-        action_map = {
-            "single_tap": {
-                "up": rc.up,
-                "down": rc.down,
-                "left": rc.left,
-                "right": rc.right,
-                "select": rc.select,
-                "menu": rc.menu,
-                "home": rc.home,
-                "top_menu": rc.top_menu,
-            },
-        }
-
-        if direction not in action_map.get("single_tap", {}):
-            return f"Unknown direction: {direction}. Use: up, down, left, right, select, menu, home, top_menu"
-
-        await action_map["single_tap"][direction]()
+        method = getattr(rc, direction)
+        await method(action=input_action)
         return f"Navigated: {direction} ({action})"

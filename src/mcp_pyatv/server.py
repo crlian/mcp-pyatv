@@ -11,25 +11,20 @@ from .tools import register_all_tools
 async def app_lifespan(server):
     # Storage and connections are created lazily on first tool call
     # to avoid timeout during MCP initialization
-    state = {"storage": None, "connections": None}
+    connections = None
 
     async def get_connections():
-        if state["connections"] is None:
+        nonlocal connections
+        if connections is None:
             storage = await get_storage()
-            state["storage"] = storage
-            state["connections"] = ConnectionManager(storage)
-        return state["connections"]
-
-    async def get_stor():
-        if state["storage"] is None:
-            state["storage"] = await get_storage()
-        return state["storage"]
+            connections = ConnectionManager(storage)
+        return connections
 
     try:
-        yield {"get_connections": get_connections, "get_storage": get_stor}
+        yield {"get_connections": get_connections, "get_storage": get_storage}
     finally:
-        if state["connections"]:
-            await state["connections"].close_all()
+        if connections:
+            await connections.close_all()
 
 
 mcp = FastMCP(
