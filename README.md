@@ -46,11 +46,24 @@ Add this to your Claude Desktop config (`~/Library/Application Support/Claude/cl
   "mcpServers": {
     "apple-tv": {
       "command": "uvx",
-      "args": ["mcp-pyatv"]
+      "args": ["--python", "python3.13", "mcp-pyatv"]
     }
   }
 }
 ```
+
+> **Note:** Claude Desktop may not inherit your shell's PATH. If you get a "command not found" error, use the full path to `uvx` (run `which uvx` in your terminal to find it):
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "apple-tv": {
+>       "command": "/Users/you/.local/bin/uvx",
+>       "args": ["--python", "python3.13", "mcp-pyatv"]
+>     }
+>   }
+> }
+> ```
 
 ### Local Development
 
