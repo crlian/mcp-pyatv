@@ -28,3 +28,9 @@ mcp-pyatv = "mcp_pyatv.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_pyatv"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]

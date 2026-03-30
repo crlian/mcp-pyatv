@@ -61,7 +61,10 @@ class ConnectionManager:
         return atv
 
     async def close_all(self):
+        tasks = set()
         for atv in self._connections.values():
-            atv.close()
+            tasks.update(atv.close())
         self._connections.clear()
         self._configs.clear()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
