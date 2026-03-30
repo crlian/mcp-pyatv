@@ -15,14 +15,17 @@ def register_discovery_tools(mcp):
     async def device_info(device: str, ctx: Context = None) -> dict:
         """Get detailed information about a specific device."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        di = atv.device_info
-        return {
-            "model": str(di.model),
-            "model_str": di.model_str,
-            "raw_model": di.raw_model,
-            "operating_system": str(di.operating_system),
-            "version": str(di.version),
-            "build_number": di.build_number,
-            "mac": di.mac,
-        }
+
+        async def _op(atv):
+            di = atv.device_info
+            return {
+                "model": str(di.model),
+                "model_str": di.model_str,
+                "raw_model": di.raw_model,
+                "operating_system": str(di.operating_system),
+                "version": str(di.version),
+                "build_number": di.build_number,
+                "mac": di.mac,
+            }
+
+        return await conn.execute(device, _op)

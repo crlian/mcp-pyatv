@@ -10,17 +10,20 @@ def register_now_playing_tools(mcp):
     async def now_playing(device: str | None = None, ctx: Context = None) -> dict:
         """Get information about what is currently playing on the device."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        playing = await atv.metadata.playing()
-        result = format_playing(playing)
-        try:
-            app = atv.metadata.app
-            if app:
-                result["app_id"] = app.identifier
-                result["app_name"] = app.name
-        except Exception:
-            pass
-        return result
+
+        async def _op(atv):
+            playing = await atv.metadata.playing()
+            result = format_playing(playing)
+            try:
+                app = atv.metadata.app
+                if app:
+                    result["app_id"] = app.identifier
+                    result["app_name"] = app.name
+            except Exception:
+                pass
+            return result
+
+        return await conn.execute(device, _op)
 
     @mcp.tool()
     async def get_artwork(
@@ -28,8 +31,7 @@ def register_now_playing_tools(mcp):
     ) -> str:
         """Get the artwork for what is currently playing. Returns base64-encoded image data."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        artwork = await atv.metadata.artwork(width=width)
+        artwork = await conn.execute(device, lambda atv: atv.metadata.artwork(width=width))
         if artwork and artwork.bytes:
             return base64.b64encode(artwork.bytes).decode("utf-8")
         return "No artwork available"

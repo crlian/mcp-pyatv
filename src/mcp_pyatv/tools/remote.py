@@ -17,49 +17,37 @@ def register_remote_tools(mcp):
     async def play(device: str | None = None, ctx: Context = None) -> str:
         """Start or resume playback."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.play()
-        return "Playing"
+        return await conn.execute(device, lambda atv: atv.remote_control.play())
 
     @mcp.tool()
     async def pause(device: str | None = None, ctx: Context = None) -> str:
         """Pause playback."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.pause()
-        return "Paused"
+        return await conn.execute(device, lambda atv: atv.remote_control.pause())
 
     @mcp.tool()
     async def play_pause(device: str | None = None, ctx: Context = None) -> str:
         """Toggle play/pause."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.play_pause()
-        return "Toggled play/pause"
+        return await conn.execute(device, lambda atv: atv.remote_control.play_pause())
 
     @mcp.tool()
     async def stop(device: str | None = None, ctx: Context = None) -> str:
         """Stop playback."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.stop()
-        return "Stopped"
+        return await conn.execute(device, lambda atv: atv.remote_control.stop())
 
     @mcp.tool()
     async def next_track(device: str | None = None, ctx: Context = None) -> str:
         """Skip to next track or chapter."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.next()
-        return "Skipped to next"
+        return await conn.execute(device, lambda atv: atv.remote_control.next())
 
     @mcp.tool()
     async def previous_track(device: str | None = None, ctx: Context = None) -> str:
         """Skip to previous track or chapter."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.previous()
-        return "Skipped to previous"
+        return await conn.execute(device, lambda atv: atv.remote_control.previous())
 
     @mcp.tool()
     async def skip_forward(
@@ -67,8 +55,7 @@ def register_remote_tools(mcp):
     ) -> str:
         """Skip forward by a number of seconds."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.skip_forward(seconds)
+        await conn.execute(device, lambda atv: atv.remote_control.skip_forward(seconds))
         return f"Skipped forward {seconds}s"
 
     @mcp.tool()
@@ -77,8 +64,7 @@ def register_remote_tools(mcp):
     ) -> str:
         """Skip backward by a number of seconds."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.skip_backward(seconds)
+        await conn.execute(device, lambda atv: atv.remote_control.skip_backward(seconds))
         return f"Skipped backward {seconds}s"
 
     @mcp.tool()
@@ -87,8 +73,7 @@ def register_remote_tools(mcp):
     ) -> str:
         """Seek to a specific position in seconds."""
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.set_position(position)
+        await conn.execute(device, lambda atv: atv.remote_control.set_position(position))
         return f"Position set to {position}s"
 
     @mcp.tool()
@@ -96,9 +81,9 @@ def register_remote_tools(mcp):
         state: str, device: str | None = None, ctx: Context = None
     ) -> str:
         """Set shuffle mode. State: 'off', 'songs', or 'albums'."""
+        shuffle = parse_shuffle(state)
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.set_shuffle(parse_shuffle(state))
+        await conn.execute(device, lambda atv: atv.remote_control.set_shuffle(shuffle))
         return f"Shuffle set to {state}"
 
     @mcp.tool()
@@ -106,9 +91,9 @@ def register_remote_tools(mcp):
         state: str, device: str | None = None, ctx: Context = None
     ) -> str:
         """Set repeat mode. State: 'off', 'track', or 'all'."""
+        repeat = parse_repeat(state)
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        await atv.remote_control.set_repeat(parse_repeat(state))
+        await conn.execute(device, lambda atv: atv.remote_control.set_repeat(repeat))
         return f"Repeat set to {state}"
 
     @mcp.tool()
@@ -127,9 +112,10 @@ def register_remote_tools(mcp):
             return f"Unknown action: {action}. Use: {', '.join(INPUT_ACTION_MAP)}"
 
         conn = await ctx.lifespan_context["get_connections"]()
-        atv = await conn.get(device)
-        rc = atv.remote_control
 
-        method = getattr(rc, direction)
-        await method(action=input_action)
-        return f"Navigated: {direction} ({action})"
+        async def _op(atv):
+            method = getattr(atv.remote_control, direction)
+            await method(action=input_action)
+            return f"Navigated: {direction} ({action})"
+
+        return await conn.execute(device, _op)

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-pyatv"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for controlling Apple TV, HomePod, and AirPlay devices via pyatv"
 readme = "README.md"
 license = "MIT"
@@ -28,6 +28,9 @@ mcp-pyatv = "mcp_pyatv.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_pyatv"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [dependency-groups]
 dev = [
