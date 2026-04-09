@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import logging
+import os
 from typing import Any
 
 import pyatv
@@ -17,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _CONNECT_RETRIES = 3
 _CONNECT_BACKOFF = [1.0, 2.0]  # seconds before attempt 2 and 3
+_DEFAULT_HEARTBEAT_INTERVAL = 30
 
 
 class ConnectionManager:
@@ -24,6 +26,11 @@ class ConnectionManager:
         self.storage = storage
         self._connections: dict[str, Any] = {}  # id -> AppleTV
         self._configs: dict[str, Any] = {}  # id -> BaseConfig
+        self._reconnect_lock = asyncio.Lock()
+        self._heartbeat_task: asyncio.Task | None = None
+        self._heartbeat_interval: int = int(
+            os.environ.get("MCP_PYATV_HEARTBEAT_INTERVAL", _DEFAULT_HEARTBEAT_INTERVAL)
+        )
 
     async def scan(self, timeout: float = 3.0):
         loop = asyncio.get_running_loop()
@@ -110,6 +117,7 @@ class ConnectionManager:
                 # HomePod / AirPlay-only: no remote_control expected, connection is valid
                 self._connections[config.identifier] = atv
                 self._configs[config.identifier] = config
+                self._start_heartbeat()
                 return atv
 
             # Apple TV: verify Companion/MRP actually established by probing a remote_control feature
@@ -125,6 +133,7 @@ class ConnectionManager:
                 )
                 self._connections[config.identifier] = atv
                 self._configs[config.identifier] = config
+                self._start_heartbeat()
                 return atv
 
             # Partial connection — Companion/MRP missing. Close and retry.
@@ -178,7 +187,8 @@ class ConnectionManager:
             _LOGGER.warning(
                 "Connection to '%s' lost (%s); reconnecting...", identifier, exc
             )
-            atv = await self._force_reconnect(identifier)
+            async with self._reconnect_lock:
+                atv = await self._force_reconnect(identifier)
             result = operation(atv)
             if inspect.isawaitable(result):
                 return await result
@@ -189,16 +199,107 @@ class ConnectionManager:
                 "protocol may not have been established — forcing reconnect",
                 identifier, exc,
             )
-            # Evict the stale connection first so _force_reconnect → _connect
-            # starts fresh and runs the probe+retry loop
-            self._connections.pop(identifier, None)
-            atv = await self._force_reconnect(identifier)
+            async with self._reconnect_lock:
+                self._connections.pop(identifier, None)
+                atv = await self._force_reconnect(identifier)
             result = operation(atv)
             if inspect.isawaitable(result):
                 return await result
             return result
 
+    # ------------------------------------------------------------------
+    # Heartbeat
+    # ------------------------------------------------------------------
+
+    def _start_heartbeat(self):
+        """Start the heartbeat task if not already running and interval > 0."""
+        if self._heartbeat_interval <= 0:
+            return
+        if self._heartbeat_task is not None and not self._heartbeat_task.done():
+            return
+        self._heartbeat_task = asyncio.get_running_loop().create_task(
+            self._heartbeat_loop()
+        )
+
+    async def _heartbeat_loop(self):
+        """Periodically probe connections and reconnect dead ones."""
+        _LOGGER.debug("Heartbeat started (interval=%ds)", self._heartbeat_interval)
+        try:
+            while True:
+                await asyncio.sleep(self._heartbeat_interval)
+
+                if not self._connections:
+                    continue
+
+                # Snapshot keys to avoid dict-changed-during-iteration
+                identifiers = list(self._connections.keys())
+
+                for identifier in identifiers:
+                    atv = self._connections.get(identifier)
+                    if atv is None:
+                        continue
+
+                    config = self._configs.get(identifier)
+                    needs_probe = config is not None and any(
+                        s.protocol in (Protocol.Companion, Protocol.MRP)
+                        for s in config.services
+                    )
+
+                    if not needs_probe:
+                        continue
+
+                    # Probe: check if Companion/MRP is still alive
+                    alive = True
+                    try:
+                        ok = atv.features.in_state(
+                            FeatureState.Available, FeatureName.Up
+                        )
+                        if not ok:
+                            alive = False
+                    except (BlockedStateError, ConnectionLostError, NotSupportedError):
+                        alive = False
+                    except Exception as exc:
+                        _LOGGER.debug(
+                            "Heartbeat: unexpected error probing '%s': %s",
+                            identifier, exc,
+                        )
+                        continue
+
+                    if alive:
+                        continue
+
+                    _LOGGER.warning(
+                        "Heartbeat: connection to '%s' is dead; reconnecting...",
+                        identifier,
+                    )
+                    try:
+                        async with self._reconnect_lock:
+                            await self._force_reconnect(identifier)
+                        _LOGGER.info("Heartbeat: reconnected to '%s'", identifier)
+                    except Exception as exc:
+                        _LOGGER.warning(
+                            "Heartbeat: failed to reconnect '%s' (%s); "
+                            "removing from cache",
+                            identifier, exc,
+                        )
+                        self._connections.pop(identifier, None)
+        except asyncio.CancelledError:
+            _LOGGER.debug("Heartbeat stopped")
+
+    # ------------------------------------------------------------------
+    # Shutdown
+    # ------------------------------------------------------------------
+
     async def close_all(self):
+        # Cancel heartbeat first
+        if self._heartbeat_task is not None:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            self._heartbeat_task = None
+
         tasks = set()
         for atv in self._connections.values():
             tasks.update(atv.close())

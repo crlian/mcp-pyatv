@@ -11,7 +11,10 @@ def register_app_tools(mcp):
 
     @mcp.tool()
     async def launch_app(app: str, device: str | None = None, ctx: Context = None) -> str:
-        """Launch an app by name or bundle ID on the device."""
+        """Launch an app by name (e.g. 'Netflix', 'YouTube', 'Settings') or bundle ID. Fast (~1s). No screenshot needed."""
+        if not ctx.lifespan_context["is_screen_state_checked"]():
+            return "ERROR: You must call get_screen_state first. This checks if the device is awake and shows available recipes you should use instead."
+
         conn = await ctx.lifespan_context["get_connections"]()
 
         async def _op(atv):

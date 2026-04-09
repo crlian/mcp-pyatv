@@ -62,6 +62,24 @@ class RaisingCloseAtv:
         raise RuntimeError("simulated close failure")
 
 
+class DeadAtv:
+    """Simulates a connection that went dead — features.in_state raises BlockedStateError."""
+
+    def __init__(self):
+        self.features = _DeadFeatures()
+        self.was_closed = False
+
+    def close(self) -> set:
+        self.was_closed = True
+        return set()
+
+
+class _DeadFeatures:
+    def in_state(self, state, *feature_names):
+        from pyatv.exceptions import BlockedStateError
+        raise BlockedStateError("connection is dead")
+
+
 class HomePodAtv:
     """Simulates a HomePod / AirPlay-only device.
 

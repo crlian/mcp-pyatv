@@ -17,37 +17,43 @@ def register_remote_tools(mcp):
     async def play(device: str | None = None, ctx: Context = None) -> str:
         """Start or resume playback."""
         conn = await ctx.lifespan_context["get_connections"]()
-        return await conn.execute(device, lambda atv: atv.remote_control.play())
+        await conn.execute(device, lambda atv: atv.remote_control.play())
+        return "Playing"
 
     @mcp.tool()
     async def pause(device: str | None = None, ctx: Context = None) -> str:
         """Pause playback."""
         conn = await ctx.lifespan_context["get_connections"]()
-        return await conn.execute(device, lambda atv: atv.remote_control.pause())
+        await conn.execute(device, lambda atv: atv.remote_control.pause())
+        return "Paused"
 
     @mcp.tool()
     async def play_pause(device: str | None = None, ctx: Context = None) -> str:
         """Toggle play/pause."""
         conn = await ctx.lifespan_context["get_connections"]()
-        return await conn.execute(device, lambda atv: atv.remote_control.play_pause())
+        await conn.execute(device, lambda atv: atv.remote_control.play_pause())
+        return "Toggled play/pause"
 
     @mcp.tool()
     async def stop(device: str | None = None, ctx: Context = None) -> str:
         """Stop playback."""
         conn = await ctx.lifespan_context["get_connections"]()
-        return await conn.execute(device, lambda atv: atv.remote_control.stop())
+        await conn.execute(device, lambda atv: atv.remote_control.stop())
+        return "Stopped"
 
     @mcp.tool()
     async def next_track(device: str | None = None, ctx: Context = None) -> str:
         """Skip to next track or chapter."""
         conn = await ctx.lifespan_context["get_connections"]()
-        return await conn.execute(device, lambda atv: atv.remote_control.next())
+        await conn.execute(device, lambda atv: atv.remote_control.next())
+        return "Skipped to next"
 
     @mcp.tool()
     async def previous_track(device: str | None = None, ctx: Context = None) -> str:
         """Skip to previous track or chapter."""
         conn = await ctx.lifespan_context["get_connections"]()
-        return await conn.execute(device, lambda atv: atv.remote_control.previous())
+        await conn.execute(device, lambda atv: atv.remote_control.previous())
+        return "Skipped to previous"
 
     @mcp.tool()
     async def skip_forward(
@@ -103,7 +109,10 @@ def register_remote_tools(mcp):
         device: str | None = None,
         ctx: Context = None,
     ) -> str:
-        """Navigate the device UI. Direction: 'up', 'down', 'left', 'right', 'select', 'menu', 'home', 'top_menu'. Action: 'single_tap', 'double_tap', 'hold'."""
+        """Press a button on the virtual Siri Remote. Works everywhere: home screen, inside apps (Netflix, YouTube, Settings, etc.). Directions: up, down, left, right = move focus. select = confirm/click. menu = go back. home = home screen. top_menu = top-level menu. Actions: single_tap (default), double_tap, hold."""
+        if not ctx.lifespan_context["is_screen_state_checked"]():
+            return "ERROR: You must call get_screen_state first before navigating. This checks if the device is awake and shows available recipes."
+
         if direction not in DIRECTION_NAMES:
             return f"Unknown direction: {direction}. Use: {', '.join(sorted(DIRECTION_NAMES))}"
 
