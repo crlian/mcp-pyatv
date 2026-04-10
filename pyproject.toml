@@ -23,6 +23,12 @@ dependencies = [
     "fastmcp>=2.0.0",
 ]
 
+[project.optional-dependencies]
+screenshots = [
+    "pymobiledevice3>=4.0.0",
+    "Pillow>=10.0.0",
+]
+
 [project.scripts]
 mcp-pyatv = "mcp_pyatv.server:main"
 
